@@ -142,9 +142,12 @@ BIN_FEATURES = [
     'feat_124',
     'feat_127',
 ]
-
+EXP = 0.00001
 
 class BinFeaturesTransformer:
+    """
+    Preprocess binary features as categorical or numeric
+    """
     def __init__(
             self,
             num_features=NUM_FEATURES,
@@ -159,7 +162,7 @@ class BinFeaturesTransformer:
         self._encoders = dict()
 
     def fit(self, df):
-        logger.debug('Fitting transformer...')
+        logger.debug('Fitting Bin transformer...')
         if self._bin_as_numeric:
             for col in self._bin_features:
                 encoder = LabelEncoder()
@@ -173,7 +176,7 @@ class BinFeaturesTransformer:
             + self._num_features
             + self._bin_features
         ].copy()
-        logger.debug('Applying transformer...')
+        logger.debug('Applying Bin transformer...')
         if self._bin_as_numeric:
             for col in self._bin_features:
                 encoder = self._encoders[col]
@@ -194,3 +197,74 @@ class BinFeaturesTransformer:
             'num_features': self._num_features,
             'cat_features': self._cat_features + self._bin_features,
         }
+
+
+class CatFeaturesTransformer:
+    """
+    Convert categorical features to numeric using target.
+    """
+    def __init__(
+            self,
+            stat_type='mean',
+            expanding=False,
+            folds_number=5,
+            alpha=0,
+    ):
+        """
+        :param stat_type: statistic type to replace categorical value.
+            Now only 'mean' is implemented.
+        :param expanding:
+            If True, we place at each place in train dataset
+            statistic of target from previous n-1 rows.
+            If False, for train we use k-folds for train dataset,
+            for test we use full train statistic.
+        :param folds_number:
+            Number of folds. Only if expanding is False.
+        :param alpha:
+            Smoothing coefficient.
+            For example, we want to replace 'value' for 'cat'.
+            If sub_df = df[df['cat']=='value'], n_rows = len(sub_df),
+            than
+            'cat_value' -> (stat(sub_df[target]) * n_rows
+                            + stat(df) * alpha) / (n_rows + alpha)
+            alpha==0 means no smoothing.
+        """
+        self._alpha = alpha
+        self._folds_number = folds_number
+        self._stat_type = stat_type
+        self._use_expanding = expanding
+        self._encodings = dict()
+        self._global_mean = None
+
+    def fit(self, df, cat_features=CAT_FEATURES, target='target'):
+        logger.debug('Fitting Cat Transformer...')
+        self._global_mean = df[target].mean()
+        logger.debug('global mean: %.4f', self._global_mean)
+        for col in cat_features:
+            cat_sum = df.groupby(col)[target].sum()
+            cat_count = df.groupby(col)[target].count()
+            cat_mean = ((cat_sum + self._global_mean * self._alpha)
+                        / (cat_count + self._alpha))
+            self._encodings[col] = cat_mean.to_dict()
+
+    def transform(self, df):
+        df = df.copy()
+        for col in self._encodings:
+            df[col] = (
+                df[col]
+                .map(self._encodings[col])
+                .fillna(self._global_mean)
+                .values
+            )
+        return df
+
+    # def fit_transform(self, df, cat_features=CAT_FEATURES, target='target'):
+    #     self._global_mean = df[target].mean()
+    #     df = df.copy()
+    #     if self._use_expanding:
+    #         for col in cat_features:
+    #             cumsum = df.groupby(col)[target].cumsum() - df[target]
+    #             cumcount = df.groupby(col).cumcount() + EXP
+    #             df[col] = ((cumsum + self._global_mean)
+    #                        / (cumcount + self._alpha))
+    #         return df
