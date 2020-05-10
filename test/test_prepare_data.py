@@ -85,6 +85,24 @@ TEST_CAT_TRANSFORMED_DF = pd.DataFrame({
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 })
+TEST_CAT_ALPHA_TRANSFORMED_DF = pd.DataFrame({
+    'cat_1': [7/15, 7/15, 7/15, 7/15, 7/15,
+              8/15, 8/15, 8/15, 8/15, 8/15],
+    'cat_2': [7/15, 7/15, 7/15, 7/15, 7/15,
+              8/15, 8/15, 8/15, 8/15, 8/15],
+    'cat_3': [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+    'cat_4': [6/14, 8/14, 5/11, 6/14, 6/14, 8/14, 6/14, 8/14, 8/14, 6/11],
+    'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
+})
+TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
+    'cat_1': [0, 0, 0.5, 1/3, 0.5, 0, 1, 0.5, 2/3, 0.5],
+    'cat_2': [0, 0, 0.5, 1/3, 0.5, 0, 1, 0.5, 2/3, 0.5],
+    'cat_3': [0, 0, 0.5, 1/3, 0.5, 2/5, 0.5, 3/7, 0.5, 4/9],
+    'cat_4': [0, 0, 0, 0, 0.5, 1, 1/3, 1, 1, 0],
+    'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
+})
 
 
 class TestCatFeaturesTransformer:
@@ -102,3 +120,23 @@ class TestCatFeaturesTransformer:
         assert_frame_equal(TEST_CAT_TRANSFORMED_DF,
                            transformed_df)
 
+    def test_alpha_transform(self):
+        transformer = CatFeaturesTransformer(alpha=10)
+        transformer.fit(TEST_CAT_DF, cat_features=CAT_FEATURES)
+        transformed_df = transformer.transform(TEST_CAT_DF)
+        assert_frame_equal(TEST_CAT_ALPHA_TRANSFORMED_DF,
+                           transformed_df)
+
+    def test_fit_transform_exp(self):
+        transformer = CatFeaturesTransformer(alpha=0, expanding=True)
+        transformed_df = transformer.fit_transform(TEST_CAT_DF,
+                                                   cat_features=CAT_FEATURES)
+        assert_frame_equal(TEST_CAT_FIT_TRANSFORMED_DF_EXP,
+                           transformed_df)
+    #
+    # def test_fit_transform_kfold(self):
+    #     transformer = CatFeaturesTransformer(alpha=0, expanding=True)
+    #     transformed_df = transformer.fit_transform(TEST_CAT_DF,
+    #                                                cat_features=CAT_FEATURES)
+    #     assert_frame_equal(TEST_CAT_FIT_TRANSFORMED_DF_EXP,
+    #                        transformed_df)

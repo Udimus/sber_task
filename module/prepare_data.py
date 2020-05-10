@@ -144,6 +144,7 @@ BIN_FEATURES = [
 ]
 EXP = 0.00001
 
+
 class BinFeaturesTransformer:
     """
     Preprocess binary features as categorical or numeric
@@ -258,13 +259,13 @@ class CatFeaturesTransformer:
             )
         return df
 
-    # def fit_transform(self, df, cat_features=CAT_FEATURES, target='target'):
-    #     self._global_mean = df[target].mean()
-    #     df = df.copy()
-    #     if self._use_expanding:
-    #         for col in cat_features:
-    #             cumsum = df.groupby(col)[target].cumsum() - df[target]
-    #             cumcount = df.groupby(col).cumcount() + EXP
-    #             df[col] = ((cumsum + self._global_mean)
-    #                        / (cumcount + self._alpha))
-    #         return df
+    def fit_transform(self, df, cat_features=CAT_FEATURES, target='target'):
+        self._global_mean = df[target].mean()
+        df = df.copy()
+        if self._use_expanding:
+            for col in cat_features:
+                cumsum = df.groupby(col)[target].cumsum() - df[target]
+                cumcount = df.groupby(col).cumcount()
+                df[col] = ((cumsum + self._global_mean * self._alpha)
+                           / (cumcount + self._alpha)).fillna(0)
+        return df
