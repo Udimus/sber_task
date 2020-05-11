@@ -85,7 +85,6 @@ TEST_CAT_TRANSFORMED_DF = pd.DataFrame({
     'cat_3': [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
     'cat_4': [0.25, 0.75, 0, 0.25, 0.25, 0.75, 0.25, 0.75, 0.75, 1],
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 })
 TEST_CAT_ALPHA_TRANSFORMED_DF = pd.DataFrame({
     'cat_1': [7/15, 7/15, 7/15, 7/15, 7/15,
@@ -95,7 +94,6 @@ TEST_CAT_ALPHA_TRANSFORMED_DF = pd.DataFrame({
     'cat_3': [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
     'cat_4': [6/14, 8/14, 5/11, 6/14, 6/14, 8/14, 6/14, 8/14, 8/14, 6/11],
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 })
 TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
     'cat_1': [0, 0, 0.5, 1/3, 0.5, 0, 1, 0.5, 2/3, 0.5],
@@ -103,7 +101,6 @@ TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
     'cat_3': [0, 0, 0.5, 1/3, 0.5, 2/5, 0.5, 3/7, 0.5, 4/9],
     'cat_4': [0, 0, 0, 0, 0.5, 1, 1/3, 1, 1, 0],
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 })
 TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
     'cat_1': [0, 0, 0.5, 1/3, 0.5, 0, 1, 0.5, 2/3, 0.5],
@@ -111,7 +108,6 @@ TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
     'cat_3': [0, 0, 0.5, 1/3, 0.5, 2/5, 0.5, 3/7, 0.5, 4/9],
     'cat_4': [0, 0, 0, 0, 0.5, 1, 1/3, 1, 1, 0],
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 })
 TEST_CAT_FIT_TRANSFORMED_DF_KFOLD = pd.DataFrame({
     'cat_1': [1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
@@ -119,7 +115,6 @@ TEST_CAT_FIT_TRANSFORMED_DF_KFOLD = pd.DataFrame({
     'cat_3': [1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
     'cat_4': [1, 0, 0.5, 0, 1, 0, 1, 0, 1, 0.5],
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 })
 
 
@@ -138,7 +133,10 @@ class KFoldMocker:
 class TestCatFeaturesTransformer:
     def test_fit(self):
         transformer = CatFeaturesTransformer(cat_features=CAT_FEATURES)
-        transformer.fit(TEST_CAT_DF)
+        print(TEST_CAT_DF)
+        y = TEST_CAT_DF['target']
+        X = TEST_CAT_DF.drop(columns=['target'])
+        transformer.fit(X, y)
         assert transformer._global_mean == 0.5
         for col in CAT_FEATURES:
             assert col in transformer._encodings
@@ -148,8 +146,10 @@ class TestCatFeaturesTransformer:
             alpha=0,
             cat_features=CAT_FEATURES,
             expanding=True)
-        transformer.fit(TEST_CAT_DF)
-        transformed_df = transformer.transform(TEST_CAT_DF)
+        y = TEST_CAT_DF['target']
+        X = TEST_CAT_DF.drop(columns=['target'])
+        transformer.fit(X, y)
+        transformed_df = transformer.transform(X)
         assert_frame_equal(TEST_CAT_TRANSFORMED_DF,
                            transformed_df,
                            check_dtype=False)
@@ -159,8 +159,10 @@ class TestCatFeaturesTransformer:
             alpha=10,
             cat_features=CAT_FEATURES,
             expanding=True)
-        transformer.fit(TEST_CAT_DF)
-        transformed_df = transformer.transform(TEST_CAT_DF)
+        y = TEST_CAT_DF['target']
+        X = TEST_CAT_DF.drop(columns=['target'])
+        transformer.fit(X, y)
+        transformed_df = transformer.transform(X)
         assert_frame_equal(TEST_CAT_ALPHA_TRANSFORMED_DF,
                            transformed_df,
                            check_dtype=False)
@@ -170,7 +172,9 @@ class TestCatFeaturesTransformer:
             alpha=0,
             cat_features=CAT_FEATURES,
             expanding=True)
-        transformed_df = transformer.fit_transform(TEST_CAT_DF)
+        y = TEST_CAT_DF['target']
+        X = TEST_CAT_DF.drop(columns=['target'])
+        transformed_df = transformer.fit_transform(X, y)
         assert_frame_equal(TEST_CAT_FIT_TRANSFORMED_DF_EXP,
                            transformed_df,
                            check_dtype=False)
@@ -183,7 +187,9 @@ class TestCatFeaturesTransformer:
             alpha=0,
             cat_features=CAT_FEATURES,
             expanding=False)
-        transformed_df = transformer.fit_transform(TEST_CAT_DF)
+        y = TEST_CAT_DF['target']
+        X = TEST_CAT_DF.drop(columns=['target'])
+        transformed_df = transformer.fit_transform(X, y)
         assert_frame_equal(TEST_CAT_FIT_TRANSFORMED_DF_KFOLD,
                            transformed_df,
                            check_dtype=False)

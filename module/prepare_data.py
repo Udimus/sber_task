@@ -149,6 +149,7 @@ BIN_FEATURES = [
 EXP = 0.00001
 RANDOM_SEED = 71
 
+
 class BinFeaturesTransformer(TransformerMixin):
     """
     Preprocess binary features as categorical or numeric
@@ -172,7 +173,7 @@ class BinFeaturesTransformer(TransformerMixin):
         self._bin_as_numeric = bin_as_numeric
         self._encoders = dict()
 
-    def fit(self, df):
+    def fit(self, df, *args):
         logger.debug('Fitting Bin transformer...')
         if self._bin_as_numeric:
             for col in self._bin_features:
@@ -218,7 +219,6 @@ class CatFeaturesTransformer(TransformerMixin):
             folds_number=5,
             alpha=0,
             cat_features=None,
-            target='target',
     ):
         """
         :param stat_type: statistic type to replace categorical value.
@@ -251,7 +251,7 @@ class CatFeaturesTransformer(TransformerMixin):
         if cat_features is None:
             cat_features = CAT_FEATURES
         self._cat_features = cat_features
-        self._target = target
+        self._target = 'target'
 
     def _get_grouped_means(self, df, col):
         cat_sum = df.groupby(col)[self._target].sum()
@@ -267,7 +267,9 @@ class CatFeaturesTransformer(TransformerMixin):
             .values
         )
 
-    def fit(self, df):
+    def fit(self, df, target):
+        df = df.copy()
+        df[self._target] = target
         logger.debug('Fitting Cat Transformer...')
         self._global_mean = df[self._target].mean()
         logger.debug('global mean: %.4f', self._global_mean)
@@ -282,7 +284,6 @@ class CatFeaturesTransformer(TransformerMixin):
         return df
 
     def _expanding_transform(self, df, col):
-        logger.debug('Transforming train dataset...')
         cumsum = (df.groupby(col)[self._target].cumsum()
                   - df[self._target])
         cumcount = df.groupby(col).cumcount()
@@ -304,13 +305,14 @@ class CatFeaturesTransformer(TransformerMixin):
                 batch, col, cat_means)
         return filler
 
-    def fit_transform(self, df, *args):
-        self.fit(df)
+    def fit_transform(self, df, target):
+        self.fit(df, target)
         df = df.copy()
+        df[self._target] = target
         logger.debug('Transforming train dataset...')
         for col in self._cat_features:
             if self._use_expanding:
                 df[col] = self._expanding_transform(df, col)
             else:
                 df[col] = self._kfold_transform(df, col)
-        return df
+        return df.drop(columns=[self._target], inplace=False)
