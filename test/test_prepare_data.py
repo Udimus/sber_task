@@ -1,6 +1,8 @@
 """
 Test for module/prepare_data.py
 """
+from unittest.mock import patch
+
 import pytest
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -103,40 +105,85 @@ TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 })
+TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
+    'cat_1': [0, 0, 0.5, 1/3, 0.5, 0, 1, 0.5, 2/3, 0.5],
+    'cat_2': [0, 0, 0.5, 1/3, 0.5, 0, 1, 0.5, 2/3, 0.5],
+    'cat_3': [0, 0, 0.5, 1/3, 0.5, 2/5, 0.5, 3/7, 0.5, 4/9],
+    'cat_4': [0, 0, 0, 0, 0.5, 1, 1/3, 1, 1, 0],
+    'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
+})
+TEST_CAT_FIT_TRANSFORMED_DF_KFOLD = pd.DataFrame({
+    'cat_1': [1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+    'cat_2': [1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+    'cat_3': [1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+    'cat_4': [1, 0, 0.5, 0, 1, 0, 1, 0, 1, 0.5],
+    'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
+})
+
+
+class KFoldMocker:
+    def __init__(self, n_splits, *args, **kwargs):
+        self._n_splits = n_splits
+
+    def split(self, df, *args, **kwargs):
+        all_indices = list(range(len(df)))
+        for i in range(self._n_splits):
+            batch = list(range(i, len(df), self._n_splits))
+            remaining_part = [i for i in all_indices if i not in batch]
+            yield remaining_part, batch
 
 
 class TestCatFeaturesTransformer:
     def test_fit(self):
-        transformer = CatFeaturesTransformer()
-        transformer.fit(TEST_CAT_DF, cat_features=CAT_FEATURES)
+        transformer = CatFeaturesTransformer(cat_features=CAT_FEATURES)
+        transformer.fit(TEST_CAT_DF)
         assert transformer._global_mean == 0.5
         for col in CAT_FEATURES:
             assert col in transformer._encodings
 
     def test_transform(self):
-        transformer = CatFeaturesTransformer(alpha=0)
-        transformer.fit(TEST_CAT_DF, cat_features=CAT_FEATURES)
+        transformer = CatFeaturesTransformer(
+            alpha=0,
+            cat_features=CAT_FEATURES,
+            expanding=True)
+        transformer.fit(TEST_CAT_DF)
         transformed_df = transformer.transform(TEST_CAT_DF)
         assert_frame_equal(TEST_CAT_TRANSFORMED_DF,
-                           transformed_df)
+                           transformed_df,
+                           check_dtype=False)
 
     def test_alpha_transform(self):
-        transformer = CatFeaturesTransformer(alpha=10)
-        transformer.fit(TEST_CAT_DF, cat_features=CAT_FEATURES)
+        transformer = CatFeaturesTransformer(
+            alpha=10,
+            cat_features=CAT_FEATURES,
+            expanding=True)
+        transformer.fit(TEST_CAT_DF)
         transformed_df = transformer.transform(TEST_CAT_DF)
         assert_frame_equal(TEST_CAT_ALPHA_TRANSFORMED_DF,
-                           transformed_df)
+                           transformed_df,
+                           check_dtype=False)
 
     def test_fit_transform_exp(self):
-        transformer = CatFeaturesTransformer(alpha=0, expanding=True)
-        transformed_df = transformer.fit_transform(TEST_CAT_DF,
-                                                   cat_features=CAT_FEATURES)
+        transformer = CatFeaturesTransformer(
+            alpha=0,
+            cat_features=CAT_FEATURES,
+            expanding=True)
+        transformed_df = transformer.fit_transform(TEST_CAT_DF)
         assert_frame_equal(TEST_CAT_FIT_TRANSFORMED_DF_EXP,
-                           transformed_df)
-    #
-    # def test_fit_transform_kfold(self):
-    #     transformer = CatFeaturesTransformer(alpha=0, expanding=True)
-    #     transformed_df = transformer.fit_transform(TEST_CAT_DF,
-    #                                                cat_features=CAT_FEATURES)
-    #     assert_frame_equal(TEST_CAT_FIT_TRANSFORMED_DF_EXP,
-    #                        transformed_df)
+                           transformed_df,
+                           check_dtype=False)
+
+    @patch('module.prepare_data.StratifiedKFold')
+    def test_fit_transform_kfold(self, mock_kfold):
+        mock_kfold.side_effect = KFoldMocker
+        transformer = CatFeaturesTransformer(
+            folds_number=2,
+            alpha=0,
+            cat_features=CAT_FEATURES,
+            expanding=False)
+        transformed_df = transformer.fit_transform(TEST_CAT_DF)
+        assert_frame_equal(TEST_CAT_FIT_TRANSFORMED_DF_KFOLD,
+                           transformed_df,
+                           check_dtype=False)

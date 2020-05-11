@@ -4,6 +4,10 @@ Tools to load and preprocess data
 import logging
 
 from sklearn.preprocessing import LabelEncoder
+from sklearn.base import TransformerMixin
+from sklearn.model_selection import StratifiedKFold
+import pandas as pd
+import numpy as np
 
 logger = logging.getLogger(__name__)
 CAT_FEATURES = [
@@ -143,19 +147,25 @@ BIN_FEATURES = [
     'feat_127',
 ]
 EXP = 0.00001
+RANDOM_SEED = 71
 
-
-class BinFeaturesTransformer:
+class BinFeaturesTransformer(TransformerMixin):
     """
     Preprocess binary features as categorical or numeric
     """
     def __init__(
             self,
-            num_features=NUM_FEATURES,
-            cat_features=CAT_FEATURES,
-            bin_features=BIN_FEATURES,
+            num_features=None,
+            cat_features=None,
+            bin_features=None,
             bin_as_numeric=False,
     ):
+        if num_features is None:
+            num_features = NUM_FEATURES
+        if cat_features is None:
+            cat_features = CAT_FEATURES
+        if bin_features is None:
+            bin_features = BIN_FEATURES
         self._cat_features = cat_features
         self._num_features = num_features
         self._bin_features = bin_features
@@ -184,9 +194,6 @@ class BinFeaturesTransformer:
                 transformed_df[col] = encoder.transform(transformed_df[col])
         return transformed_df
 
-    def fit_transform(self, df):
-        return self.fit(df).transform(df)
-
     def get_features(self):
         if self._bin_as_numeric:
             return {
@@ -200,7 +207,7 @@ class BinFeaturesTransformer:
         }
 
 
-class CatFeaturesTransformer:
+class CatFeaturesTransformer(TransformerMixin):
     """
     Convert categorical features to numeric using target.
     """
@@ -210,6 +217,8 @@ class CatFeaturesTransformer:
             expanding=False,
             folds_number=5,
             alpha=0,
+            cat_features=None,
+            target='target',
     ):
         """
         :param stat_type: statistic type to replace categorical value.
@@ -229,6 +238,9 @@ class CatFeaturesTransformer:
             'cat_value' -> (stat(sub_df[target]) * n_rows
                             + stat(df) * alpha) / (n_rows + alpha)
             alpha==0 means no smoothing.
+        :param cat_features:
+            List of columns with categorical features to replace.
+        :param target: Name of target column.
         """
         self._alpha = alpha
         self._folds_number = folds_number
@@ -236,36 +248,69 @@ class CatFeaturesTransformer:
         self._use_expanding = expanding
         self._encodings = dict()
         self._global_mean = None
+        if cat_features is None:
+            cat_features = CAT_FEATURES
+        self._cat_features = cat_features
+        self._target = target
 
-    def fit(self, df, cat_features=CAT_FEATURES, target='target'):
+    def _get_grouped_means(self, df, col):
+        cat_sum = df.groupby(col)[self._target].sum()
+        cat_count = df.groupby(col)[self._target].count()
+        return ((cat_sum + self._global_mean * self._alpha)
+                / (cat_count + self._alpha)).to_dict()
+
+    def _fill_with_stats(self, df, col, cat_stats):
+        return (
+            df[col]
+            .map(cat_stats)
+            .fillna(self._global_mean)
+            .values
+        )
+
+    def fit(self, df):
         logger.debug('Fitting Cat Transformer...')
-        self._global_mean = df[target].mean()
+        self._global_mean = df[self._target].mean()
         logger.debug('global mean: %.4f', self._global_mean)
-        for col in cat_features:
-            cat_sum = df.groupby(col)[target].sum()
-            cat_count = df.groupby(col)[target].count()
-            cat_mean = ((cat_sum + self._global_mean * self._alpha)
-                        / (cat_count + self._alpha))
-            self._encodings[col] = cat_mean.to_dict()
+        for col in self._cat_features:
+            self._encodings[col] = self._get_grouped_means(df, col)
 
     def transform(self, df):
+        logger.debug('Transforming test dataset...')
         df = df.copy()
         for col in self._encodings:
-            df[col] = (
-                df[col]
-                .map(self._encodings[col])
-                .fillna(self._global_mean)
-                .values
-            )
+            df[col] = self._fill_with_stats(df, col, self._encodings[col])
         return df
 
-    def fit_transform(self, df, cat_features=CAT_FEATURES, target='target'):
-        self._global_mean = df[target].mean()
+    def _expanding_transform(self, df, col):
+        logger.debug('Transforming train dataset...')
+        cumsum = (df.groupby(col)[self._target].cumsum()
+                  - df[self._target])
+        cumcount = df.groupby(col).cumcount()
+        return ((cumsum + self._global_mean * self._alpha)
+                / (cumcount + self._alpha)).fillna(0)
+
+    def _kfold_transform(self, df, col):
+        splitter = StratifiedKFold(
+            n_splits=self._folds_number,
+            shuffle=False,
+            random_state=RANDOM_SEED,
+        )
+        filler = pd.Series(index=df.index, dtype=np.float64)
+        for remaining_idx, batch_idx in splitter.split(df, df[col]):
+            batch = df.iloc[batch_idx]
+            remaining_df = df.iloc[remaining_idx]
+            cat_means = self._get_grouped_means(remaining_df, col)
+            filler.iloc[batch_idx] = self._fill_with_stats(
+                batch, col, cat_means)
+        return filler
+
+    def fit_transform(self, df, *args):
+        self.fit(df)
         df = df.copy()
-        if self._use_expanding:
-            for col in cat_features:
-                cumsum = df.groupby(col)[target].cumsum() - df[target]
-                cumcount = df.groupby(col).cumcount()
-                df[col] = ((cumsum + self._global_mean * self._alpha)
-                           / (cumcount + self._alpha)).fillna(0)
+        logger.debug('Transforming train dataset...')
+        for col in self._cat_features:
+            if self._use_expanding:
+                df[col] = self._expanding_transform(df, col)
+            else:
+                df[col] = self._kfold_transform(df, col)
         return df
