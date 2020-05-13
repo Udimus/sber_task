@@ -29,7 +29,35 @@ class OurLossCBObjective:
         return result
 
 
-def our_loss_lgb_objective(y_true, y_pred, weights=None):
+class OurLossCBMetric(object):
+    def get_final_error(self, error, weight=None):
+        return error / (weight + 1e-38)
+
+    def is_max_optimal(self):
+        return False
+
+    def evaluate(self, approxes, target, weight=None):
+        assert len(approxes) == 1
+        assert len(target) == len(approxes[0])
+
+        approx = approxes[0]
+
+        error_sum = 0.0
+        weight_sum = 0.0
+
+        for i in range(len(approx)):
+            w = 1.0 if weight is None else weight[i]
+            weight_sum += w
+            diff = approx[i] - target[i]
+            if diff < 0:
+                error_sum += - w * diff
+            else:
+                error_sum += w * diff ** 2
+
+        return error_sum, weight_sum
+
+
+def our_loss_lgbm_objective(y_true, y_pred, weights=None):
     assert len(y_true) == len(y_pred)
     if weights is not None:
         assert len(weights) == len(y_pred)
@@ -52,6 +80,11 @@ def our_loss_function(y_true, y_pred, weights=None):
     return np.mean(loss)
 
 
+def our_loss_lgbm_metric(y_true, y_pred, weights=None):
+    loss = our_loss_function(y_true, y_pred, weights)
+    return "our_custom_metric", np.mean(loss), False
+
+
 class BaseRegressorWrapper(RegressorMixin):
     def __init__(self):
         self.model = None
@@ -67,8 +100,8 @@ class BaseRegressorWrapper(RegressorMixin):
         self.model.fit(self._prepare_pool(X, y), **params)
         return self
 
-    def predict(self, X):
-        return self.model.predict(self._prepare_pool(X))
+    def predict(self, X, **params):
+        return self.model.predict(self._prepare_pool(X), **params)
 
     def fit_predict(self, X, y, **params):
         return self.model.fit(X, y, **params).predict(X)
@@ -93,6 +126,11 @@ class CatboostWrapper(BaseRegressorWrapper):
             cat_features=self.cat_features,
             feature_names=X.columns.tolist()
         )
+
+    def predict(self, X, **params):
+        return self.model.predict(self._prepare_pool(X),
+                                  prediction_type='RawFormulaVal',
+                                  **params)
 
 
 class LightgbmWrapper(BaseRegressorWrapper):

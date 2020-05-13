@@ -12,8 +12,9 @@ from lightgbm import Dataset
 
 from module.model import (
     our_loss_function,
-    our_loss_lgb_objective,
+    our_loss_lgbm_objective,
     OurLossCBObjective,
+    OurLossCBMetric,
     CatboostWrapper,
     LightgbmWrapper,
 )
@@ -59,14 +60,14 @@ def test_our_loss_function(y_true, y_pred, loss, grad, hess):
 @pytest.mark.parametrize(TEST_OUR_LOSS_FUNCTION_PARAM_NAMES,
                          TEST_OUR_LOSS_FUNCTION_PARAMS)
 def test_our_loss_lgb_objective(y_true, y_pred, loss, grad, hess):
-    test_grad, test_hess = our_loss_lgb_objective(y_true, y_pred)
+    test_grad, test_hess = our_loss_lgbm_objective(y_true, y_pred)
     assert_array_equal(test_grad, grad)
     assert_array_equal(test_hess, hess)
 
 
 @pytest.mark.parametrize(TEST_OUR_LOSS_FUNCTION_PARAM_NAMES,
                          TEST_OUR_LOSS_FUNCTION_PARAMS)
-def test_our_loss_lgb_objective(y_true, y_pred, loss, grad, hess):
+def test_our_loss_cb_objective(y_true, y_pred, loss, grad, hess):
     objective = OurLossCBObjective()
     result = objective.calc_ders_range(y_pred, y_true)
     test_grad, test_hess = zip(*result)
@@ -76,15 +77,33 @@ def test_our_loss_lgb_objective(y_true, y_pred, loss, grad, hess):
     assert_array_equal(test_hess, hess)
 
 
+@pytest.mark.parametrize(TEST_OUR_LOSS_FUNCTION_PARAM_NAMES,
+                         TEST_OUR_LOSS_FUNCTION_PARAMS)
+def test_loss_cb_metric(y_true, y_pred, loss, grad, hess):
+    metric = OurLossCBMetric()
+    assert metric.is_max_optimal() is False
+    error_sum, weight_sum = metric.evaluate([y_pred], y_true)
+    assert metric.get_final_error(error_sum, weight_sum) == loss
+
+
 TEST_REGRESSORS_DF = pd.DataFrame({
-    'target': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    'target': [1, 2, 3, 4, 5, 6, 7, 8, 9, 13],
     'cat_feat': ['a', 'a', 'a', 'a', 'a', 'b', 'b', 'b', 'b', 'b'],
     'num_feat': [0, 0, 1, 1, 1, 0, 0, 1, 1, 1],
 })
-TEST_REGRESSORS_POSSIBLE_PREDICTION = [1.5, 1.5, 4, 4, 4, 6.5, 6.5, 9, 9, 9]
-CATBOOST_PARAMS = [
-    {},
-    # {'loss_function': OurLossCBObjective}
+CATBOOST_TEST_PARAMS = [
+    (
+        {},
+        [1.5, 1.5, 4, 4, 4, 6.5, 6.5, 10, 10, 10]
+    ),
+    (
+        {
+            'loss_function': OurLossCBObjective(),
+            'eval_metric': OurLossCBMetric(),
+        },
+        [1.5, 1.5, 4, 4, 4, 6.5, 6.5, 9, 9, 9]
+    )
+
 ]
 
 
@@ -99,29 +118,29 @@ class TestCatboostWrapper:
         assert pool.num_col() == X.shape[1]
         assert pool.num_row() == X.shape[0]
 
-    @pytest.mark.parametrize('params', CATBOOST_PARAMS)
-    def test_fit(self, params):
+    @pytest.mark.parametrize('params,prediction', CATBOOST_TEST_PARAMS)
+    def test_fit(self, params, prediction):
         clf = CatboostWrapper(cat_features=['cat_feat'], **params)
         X = TEST_REGRESSORS_DF.drop(columns=['target'], inplace=False)
         y = TEST_REGRESSORS_DF['target']
         clf.fit(X, y, verbose=False)
 
-    @pytest.mark.parametrize('params', CATBOOST_PARAMS)
-    def test_predict(self, params):
+    @pytest.mark.parametrize('params,prediction', CATBOOST_TEST_PARAMS)
+    def test_predict(self, params, prediction):
         clf = CatboostWrapper(cat_features=['cat_feat'], **params)
         X = TEST_REGRESSORS_DF.drop(columns=['target'], inplace=False)
         y = TEST_REGRESSORS_DF['target']
         clf.fit(X, y, verbose=False)
-        possible_prediction = np.array(TEST_REGRESSORS_POSSIBLE_PREDICTION)
+        possible_prediction = np.array(prediction)
         assert_allclose(possible_prediction, clf.predict(X),
                         rtol=0.01, atol=0.1)
 
-    @pytest.mark.parametrize('params', CATBOOST_PARAMS)
-    def test_fit_predict(self, params):
+    @pytest.mark.parametrize('params,prediction', CATBOOST_TEST_PARAMS)
+    def test_fit_predict(self, params, prediction):
         clf = CatboostWrapper(cat_features=['cat_feat'], **params)
         X = TEST_REGRESSORS_DF.drop(columns=['target'], inplace=False)
         y = TEST_REGRESSORS_DF['target']
-        possible_prediction = np.array(TEST_REGRESSORS_POSSIBLE_PREDICTION)
+        possible_prediction = np.array(prediction)
         assert_allclose(possible_prediction,
                         clf.fit(X, y, verbose=False).predict(X),
                         rtol=0.01, atol=0.1)
@@ -129,6 +148,7 @@ class TestCatboostWrapper:
 
 LIGHTGBM_PARAMS = [
     {'min_child_samples': 1},
+    # {'objective': our_loss_lgb_objective, 'min_child_samples': 1},
 ]
 
 

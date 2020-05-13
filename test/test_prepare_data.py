@@ -10,6 +10,9 @@ from pandas.testing import assert_frame_equal
 from module.prepare_data import (
     BinFeaturesTransformer,
     CatFeaturesTransformer,
+    CAT_FEATURES,
+    BIN_FEATURES,
+    NUM_FEATURES,
 )
 
 
@@ -31,6 +34,12 @@ TEST_TRANSFORMED_DF = pd.DataFrame({
 
 
 class TestBinFeaturesTransformer:
+    def test_init(self):
+        transformer = BinFeaturesTransformer()
+        assert transformer._bin_features == BIN_FEATURES
+        assert transformer._cat_features == CAT_FEATURES
+        assert transformer._num_features == NUM_FEATURES
+
     def test_bin_as_numeric(self):
         transformer = BinFeaturesTransformer(
             num_features=TEST_NUM_FEATURES,
@@ -78,7 +87,8 @@ TEST_CAT_DF = pd.DataFrame({
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     'target': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 })
-CAT_FEATURES = [col for col in TEST_CAT_DF.columns if col.startswith('cat')]
+TEST_CAT_DF_FEATURES = [col for col in TEST_CAT_DF.columns
+                     if col.startswith('cat')]
 TEST_CAT_TRANSFORMED_DF = pd.DataFrame({
     'cat_1': [0.4, 0.4, 0.4, 0.4, 0.4, 0.6, 0.6, 0.6, 0.6, 0.6],
     'cat_2': [0.4, 0.4, 0.4, 0.4, 0.4, 0.6, 0.6, 0.6, 0.6, 0.6],
@@ -93,13 +103,6 @@ TEST_CAT_ALPHA_TRANSFORMED_DF = pd.DataFrame({
               8/15, 8/15, 8/15, 8/15, 8/15],
     'cat_3': [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
     'cat_4': [6/14, 8/14, 5/11, 6/14, 6/14, 8/14, 6/14, 8/14, 8/14, 6/11],
-    'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-})
-TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
-    'cat_1': [0, 0, 0.5, 1/3, 0.5, 0, 1, 0.5, 2/3, 0.5],
-    'cat_2': [0, 0, 0.5, 1/3, 0.5, 0, 1, 0.5, 2/3, 0.5],
-    'cat_3': [0, 0, 0.5, 1/3, 0.5, 2/5, 0.5, 3/7, 0.5, 4/9],
-    'cat_4': [0, 0, 0, 0, 0.5, 1, 1/3, 1, 1, 0],
     'num_1': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 })
 TEST_CAT_FIT_TRANSFORMED_DF_EXP = pd.DataFrame({
@@ -132,19 +135,19 @@ class KFoldMocker:
 
 class TestCatFeaturesTransformer:
     def test_fit(self):
-        transformer = CatFeaturesTransformer(cat_features=CAT_FEATURES)
+        transformer = CatFeaturesTransformer(cat_features=TEST_CAT_DF_FEATURES)
         print(TEST_CAT_DF)
         y = TEST_CAT_DF['target']
         X = TEST_CAT_DF.drop(columns=['target'])
         transformer.fit(X, y)
         assert transformer._global_mean == 0.5
-        for col in CAT_FEATURES:
+        for col in TEST_CAT_DF_FEATURES:
             assert col in transformer._encodings
 
     def test_transform(self):
         transformer = CatFeaturesTransformer(
             alpha=0,
-            cat_features=CAT_FEATURES,
+            cat_features=TEST_CAT_DF_FEATURES,
             expanding=True)
         y = TEST_CAT_DF['target']
         X = TEST_CAT_DF.drop(columns=['target'])
@@ -157,7 +160,7 @@ class TestCatFeaturesTransformer:
     def test_alpha_transform(self):
         transformer = CatFeaturesTransformer(
             alpha=10,
-            cat_features=CAT_FEATURES,
+            cat_features=TEST_CAT_DF_FEATURES,
             expanding=True)
         y = TEST_CAT_DF['target']
         X = TEST_CAT_DF.drop(columns=['target'])
@@ -170,7 +173,7 @@ class TestCatFeaturesTransformer:
     def test_fit_transform_exp(self):
         transformer = CatFeaturesTransformer(
             alpha=0,
-            cat_features=CAT_FEATURES,
+            cat_features=TEST_CAT_DF_FEATURES,
             expanding=True)
         y = TEST_CAT_DF['target']
         X = TEST_CAT_DF.drop(columns=['target'])
@@ -185,7 +188,7 @@ class TestCatFeaturesTransformer:
         transformer = CatFeaturesTransformer(
             folds_number=2,
             alpha=0,
-            cat_features=CAT_FEATURES,
+            cat_features=TEST_CAT_DF_FEATURES,
             expanding=False)
         y = TEST_CAT_DF['target']
         X = TEST_CAT_DF.drop(columns=['target'])
