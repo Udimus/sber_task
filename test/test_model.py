@@ -147,8 +147,14 @@ class TestCatboostWrapper:
 
 
 LIGHTGBM_PARAMS = [
-    {'min_child_samples': 1},
-    # {'objective': our_loss_lgb_objective, 'min_child_samples': 1},
+    (
+        {'min_child_samples': 1},
+        [1.5, 1.5, 4, 4, 4, 6.5, 6.5, 10, 10, 10]
+    ),
+    (
+        {'objective': our_loss_lgbm_objective, 'min_child_samples': 1},
+        [1.5, 1.5, 4, 4, 4, 6.5, 6.5, 9, 9, 9]
+    )
 ]
 
 
@@ -161,29 +167,29 @@ class TestLightgbmWrapper:
         assert_array_equal(X.values, new_X.values)
         assert new_X['cat_feat'].dtype.name == 'category'
 
-    @pytest.mark.parametrize('params', LIGHTGBM_PARAMS)
-    def test_fit(self, params):
+    @pytest.mark.parametrize('params,prediction', LIGHTGBM_PARAMS)
+    def test_fit(self, params, prediction):
         clf = LightgbmWrapper(cat_features=['cat_feat'], **params)
         X = TEST_REGRESSORS_DF.drop(columns=['target'], inplace=False)
         y = TEST_REGRESSORS_DF['target']
         clf.fit(X, y, verbose=False)
 
-    @pytest.mark.parametrize('params', LIGHTGBM_PARAMS)
-    def test_predict(self, params):
+    @pytest.mark.parametrize('params,prediction', LIGHTGBM_PARAMS)
+    def test_predict(self, params, prediction):
         clf = LightgbmWrapper(cat_features=['cat_feat'], **params)
         X = TEST_REGRESSORS_DF.drop(columns=['target'], inplace=False)
         y = TEST_REGRESSORS_DF['target']
         clf.fit(X, y, verbose=False)
-        possible_prediction = np.array(TEST_REGRESSORS_POSSIBLE_PREDICTION)
+        possible_prediction = np.array(prediction)
         assert_allclose(possible_prediction, clf.predict(X),
                         rtol=0.01, atol=0.1)
 
-    @pytest.mark.parametrize('params', LIGHTGBM_PARAMS)
-    def test_fit_predict(self, params):
+    @pytest.mark.parametrize('params,prediction', LIGHTGBM_PARAMS)
+    def test_fit_predict(self, params, prediction):
         clf = LightgbmWrapper(cat_features=['cat_feat'], **params)
         X = TEST_REGRESSORS_DF.drop(columns=['target'], inplace=False)
         y = TEST_REGRESSORS_DF['target']
-        possible_prediction = np.array(TEST_REGRESSORS_POSSIBLE_PREDICTION)
+        possible_prediction = np.array(prediction)
         assert_allclose(possible_prediction,
                         clf.fit(X, y, verbose=False).predict(X),
                         rtol=0.01, atol=0.1)

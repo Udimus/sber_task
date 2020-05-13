@@ -5,6 +5,7 @@ import numpy as np
 from catboost import CatBoostRegressor, Pool
 from lightgbm import Dataset, LGBMRegressor
 from sklearn.base import RegressorMixin
+from scipy.optimize import minimize
 
 class OurLossCBObjective:
     def calc_ders_range(self, approxes, targets, weights=None):
@@ -65,7 +66,7 @@ def our_loss_lgbm_objective(y_true, y_pred, weights=None):
         weights = np.ones_like(y_pred)
     residual = (y_true - y_pred).astype("float") * weights
     grad = np.where(residual < 0, -2 * residual, -1)
-    hess = np.where(residual < 0, 2, 0)
+    hess = np.where(residual < 0, 2, 0.1)
     return grad, hess
 
 
@@ -83,6 +84,29 @@ def our_loss_function(y_true, y_pred, weights=None):
 def our_loss_lgbm_metric(y_true, y_pred, weights=None):
     loss = our_loss_function(y_true, y_pred, weights)
     return "our_custom_metric", np.mean(loss), False
+
+
+def get_best_const(y_true):
+    ones = np.ones_like(y_true)
+
+    def const_loss(koef):
+        return our_loss_function(y_true, ones * koef[0])
+
+    def const_jac(koef):
+        grad, hess = our_loss_lgbm_objective(y_true, ones * koef[0])
+        return np.array([np.mean(grad)])
+
+    def const_hess(koef):
+        grad, hess = our_loss_lgbm_objective(y_true, ones * koef[0])
+        return np.array([np.mean(hess)])
+
+    res = minimize(
+        fun=const_loss,
+        x0=np.array([0]),
+        jac=const_jac,
+        hess=const_hess,
+    )
+    return res.x[0]
 
 
 class BaseRegressorWrapper(RegressorMixin):
@@ -140,6 +164,9 @@ class LightgbmWrapper(BaseRegressorWrapper):
         if cat_features is None:
             cat_features = []
         self.cat_features = cat_features
+        self._our_loss = our_loss_lgbm_objective == params.get('objective')
+        if self._our_loss:
+            self.const = 0
         self.model = LGBMRegressor(**params)
 
     def _prepare_pool(self, X, y=None):
@@ -149,8 +176,26 @@ class LightgbmWrapper(BaseRegressorWrapper):
         return X
 
     def fit(self, X, y, **params):
-        self.model.fit(self._prepare_pool(X),
-                       y,
-                       categorical_feature=self.cat_features,
-                       **params)
+        if self._our_loss:
+            self.const = get_best_const(y)
+            print(self.cat_features,)
+            print(X)
+            print(self.const)
+            self.model.fit(self._prepare_pool(X),
+                           y,
+                           init_score=np.ones_like(y) * self.const,
+                           categorical_feature=self.cat_features,
+                           **params)
+            print(self.model.booster_.dump_model()['tree_info'][0])
+        else:
+            self.model.fit(self._prepare_pool(X),
+                           y,
+                           categorical_feature=self.cat_features,
+                           **params)
         return self
+
+    def predict(self, X, **params):
+        prediction = self.model.predict(self._prepare_pool(X), **params)
+        if self._our_loss:
+            prediction += np.ones(len(X)) * self.const
+        return prediction
