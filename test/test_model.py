@@ -1,6 +1,7 @@
 """
 Test for module/model.py
 """
+from functools import reduce
 
 import pytest
 import numpy as np
@@ -17,27 +18,59 @@ from module.model import (
     OurLossCBMetric,
     CatboostWrapper,
     LightgbmWrapper,
+    OUR_LOSS_HESS_CONST,
+    get_our_loss_best_const,
 )
 
-TEST_OUR_LOSS_FUNCTION_PARAMS = [
+TEST_OUR_LOSS_INPUTS = [
     (
         np.array([0]),
         np.array([6]),
-        36,
-        np.array([12]),
-        np.array([2]),
     ),
     (
         np.array([0]),
         np.array([-6]),
-        6,
-        np.array([-1]),
-        np.array([0]),
     ),
     (
         np.array([0, 0]),
         np.array([-6, 6]),
+    )
+]
+TEST_OUR_LOSS_VALUES = [
+    (
+        36,
+    ),
+    (
+        6,
+    ),
+    (
         21,
+    )
+]
+TEST_OUR_LOSS_LGBM_GRAD_HESS = [
+    (
+        np.array([12]),
+        np.array([2]),
+    ),
+    (
+        np.array([-1]),
+        np.array([OUR_LOSS_HESS_CONST]),
+    ),
+    (
+        np.array([-1, 12]),
+        np.array([OUR_LOSS_HESS_CONST, 2]),
+    )
+]
+TEST_OUR_LOSS_CATBOOST_GRAD_HESS = [
+    (
+        np.array([12]),
+        np.array([2]),
+    ),
+    (
+        np.array([-1]),
+        np.array([0]),
+    ),
+    (
         np.array([-1, 12]),
         np.array([0, 2]),
     )
@@ -51,23 +84,33 @@ TEST_OUR_LOSS_FUNCTION_PARAM_NAMES = ','.join([
 ])
 
 
-@pytest.mark.parametrize(TEST_OUR_LOSS_FUNCTION_PARAM_NAMES,
-                         TEST_OUR_LOSS_FUNCTION_PARAMS)
-def test_our_loss_function(y_true, y_pred, loss, grad, hess):
+def join_params(list_of_params):
+    result = []
+    for tuples in zip(*list_of_params):
+        result.append(reduce(lambda x, y: x + y, tuples))
+    return result
+
+
+@pytest.mark.parametrize('y_true,y_pred,loss',
+                         join_params([TEST_OUR_LOSS_INPUTS,
+                                      TEST_OUR_LOSS_VALUES]))
+def test_our_loss_function(y_true, y_pred, loss):
     assert loss == our_loss_function(y_true, y_pred)
 
 
-@pytest.mark.parametrize(TEST_OUR_LOSS_FUNCTION_PARAM_NAMES,
-                         TEST_OUR_LOSS_FUNCTION_PARAMS)
-def test_our_loss_lgb_objective(y_true, y_pred, loss, grad, hess):
+@pytest.mark.parametrize('y_true,y_pred,grad,hess',
+                         join_params([TEST_OUR_LOSS_INPUTS,
+                                      TEST_OUR_LOSS_LGBM_GRAD_HESS]))
+def test_our_loss_lgb_objective(y_true, y_pred, grad, hess):
     test_grad, test_hess = our_loss_lgbm_objective(y_true, y_pred)
     assert_array_equal(test_grad, grad)
     assert_array_equal(test_hess, hess)
 
 
-@pytest.mark.parametrize(TEST_OUR_LOSS_FUNCTION_PARAM_NAMES,
-                         TEST_OUR_LOSS_FUNCTION_PARAMS)
-def test_our_loss_cb_objective(y_true, y_pred, loss, grad, hess):
+@pytest.mark.parametrize('y_true,y_pred,grad,hess',
+                         join_params([TEST_OUR_LOSS_INPUTS,
+                                      TEST_OUR_LOSS_CATBOOST_GRAD_HESS]))
+def test_our_loss_cb_objective(y_true, y_pred, grad, hess):
     objective = OurLossCBObjective()
     result = objective.calc_ders_range(y_pred, y_true)
     test_grad, test_hess = zip(*result)
@@ -77,9 +120,10 @@ def test_our_loss_cb_objective(y_true, y_pred, loss, grad, hess):
     assert_array_equal(test_hess, hess)
 
 
-@pytest.mark.parametrize(TEST_OUR_LOSS_FUNCTION_PARAM_NAMES,
-                         TEST_OUR_LOSS_FUNCTION_PARAMS)
-def test_loss_cb_metric(y_true, y_pred, loss, grad, hess):
+@pytest.mark.parametrize('y_true,y_pred,loss',
+                         join_params([TEST_OUR_LOSS_INPUTS,
+                                      TEST_OUR_LOSS_VALUES]))
+def test_loss_cb_metric(y_true, y_pred, loss):
     metric = OurLossCBMetric()
     assert metric.is_max_optimal() is False
     error_sum, weight_sum = metric.evaluate([y_pred], y_true)
@@ -144,6 +188,31 @@ class TestCatboostWrapper:
         assert_allclose(possible_prediction,
                         clf.fit(X, y, verbose=False).predict(X),
                         rtol=0.01, atol=0.1)
+
+
+BEST_CONST_PARAMS = [
+    (
+        [0, 1, 2],
+        1
+    ),
+    (
+        [0, 1, 100],
+        1
+    ),
+    (
+        [0, 1],
+        0.5
+    ),
+    (
+        [0, 10],
+        0.5
+    ),
+]
+
+
+@pytest.mark.parametrize('y_true,best_const', BEST_CONST_PARAMS)
+def test_get_our_loss_best_const(y_true, best_const):
+    assert best_const == get_our_loss_best_const(y_true)
 
 
 LIGHTGBM_PARAMS = [

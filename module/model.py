@@ -7,6 +7,8 @@ from lightgbm import Dataset, LGBMRegressor
 from sklearn.base import RegressorMixin
 from scipy.optimize import minimize
 
+OUR_LOSS_HESS_CONST = 0.1
+
 class OurLossCBObjective:
     def calc_ders_range(self, approxes, targets, weights=None):
         assert len(approxes) == len(targets)
@@ -66,7 +68,7 @@ def our_loss_lgbm_objective(y_true, y_pred, weights=None):
         weights = np.ones_like(y_pred)
     residual = (y_true - y_pred).astype("float") * weights
     grad = np.where(residual < 0, -2 * residual, -1)
-    hess = np.where(residual < 0, 2, 0.1)
+    hess = np.where(residual < 0, 2, OUR_LOSS_HESS_CONST)
     return grad, hess
 
 
@@ -86,22 +88,23 @@ def our_loss_lgbm_metric(y_true, y_pred, weights=None):
     return "our_custom_metric", np.mean(loss), False
 
 
-def get_best_const(y_true):
+def get_our_loss_best_const(y_true):
     ones = np.ones_like(y_true)
 
     def const_loss(koef):
         return our_loss_function(y_true, ones * koef[0])
 
     def const_jac(koef):
-        grad, hess = our_loss_lgbm_objective(y_true, ones * koef[0])
+        grad, _ = our_loss_lgbm_objective(y_true, ones * koef[0])
         return np.array([np.mean(grad)])
 
     def const_hess(koef):
-        grad, hess = our_loss_lgbm_objective(y_true, ones * koef[0])
+        _, hess = our_loss_lgbm_objective(y_true, ones * koef[0])
         return np.array([np.mean(hess)])
 
     res = minimize(
         fun=const_loss,
+        method='BFGS',
         x0=np.array([0]),
         jac=const_jac,
         hess=const_hess,
@@ -177,7 +180,7 @@ class LightgbmWrapper(BaseRegressorWrapper):
 
     def fit(self, X, y, **params):
         if self._our_loss:
-            self.const = get_best_const(y)
+            self.const = get_our_loss_best_const(y)
             print(self.cat_features,)
             print(X)
             print(self.const)
