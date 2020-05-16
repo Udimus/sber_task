@@ -181,15 +181,11 @@ class LightgbmWrapper(BaseRegressorWrapper):
     def fit(self, X, y, **params):
         if self._our_loss:
             self.const = get_our_loss_best_const(y)
-            print(self.cat_features,)
-            print(X)
-            print(self.const)
             self.model.fit(self._prepare_pool(X),
                            y,
                            init_score=np.ones_like(y) * self.const,
                            categorical_feature=self.cat_features,
                            **params)
-            print(self.model.booster_.dump_model()['tree_info'][0])
         else:
             self.model.fit(self._prepare_pool(X),
                            y,

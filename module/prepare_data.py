@@ -3,7 +3,7 @@ Tools to load and preprocess data
 """
 import logging
 
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelBinarizer
 from sklearn.base import TransformerMixin
 from sklearn.model_selection import StratifiedKFold
 import pandas as pd
@@ -177,7 +177,7 @@ class BinFeaturesTransformer(TransformerMixin):
         logger.debug('Fitting Bin transformer...')
         if self._bin_as_numeric:
             for col in self._bin_features:
-                encoder = LabelEncoder()
+                encoder = LabelBinarizer()
                 encoder.fit(df[col])
                 self._encoders[col] = encoder
         return self
@@ -206,6 +206,20 @@ class BinFeaturesTransformer(TransformerMixin):
             'num_features': self._num_features,
             'cat_features': self._cat_features + self._bin_features,
         }
+
+
+class DropTransformer(TransformerMixin):
+    """
+    Drop selected columns from dataset
+    """
+    def __init__(self, drop_columns,):
+        self.drop_columns = drop_columns
+
+    def fit(self, df, *args):
+        return self
+
+    def transform(self, df):
+        return df.drop(columns=self.drop_columns)
 
 
 class CatFeaturesTransformer(TransformerMixin):
