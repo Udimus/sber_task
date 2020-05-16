@@ -1,15 +1,24 @@
 """
 Tools to deal with model.
 """
+import logging
+import gzip
+import pickle
+
 import numpy as np
 from catboost import CatBoostRegressor, Pool
 from lightgbm import Dataset, LGBMRegressor
 from sklearn.base import RegressorMixin
 from scipy.optimize import minimize
 
+logger = logging.getLogger(__name__)
 OUR_LOSS_HESS_CONST = 0.1
 
+
 class OurLossCBObjective:
+    """
+    Our custom loss objective for catboost
+    """
     def calc_ders_range(self, approxes, targets, weights=None):
         assert len(approxes) == len(targets)
         if weights is not None:
@@ -33,6 +42,9 @@ class OurLossCBObjective:
 
 
 class OurLossCBMetric(object):
+    """
+    Our custom metric for catboost
+    """
     def get_final_error(self, error, weight=None):
         return error / (weight + 1e-38)
 
@@ -61,6 +73,9 @@ class OurLossCBMetric(object):
 
 
 def our_loss_lgbm_objective(y_true, y_pred, weights=None):
+    """
+    Our custom loss objective for LightGBM
+    """
     assert len(y_true) == len(y_pred)
     if weights is not None:
         assert len(weights) == len(y_pred)
@@ -73,6 +88,9 @@ def our_loss_lgbm_objective(y_true, y_pred, weights=None):
 
 
 def our_loss_function(y_true, y_pred, weights=None):
+    """
+    Our custom loss metric
+    """
     assert len(y_true) == len(y_pred)
     if weights is not None:
         assert len(weights) == len(y_pred)
@@ -84,11 +102,17 @@ def our_loss_function(y_true, y_pred, weights=None):
 
 
 def our_loss_lgbm_metric(y_true, y_pred, weights=None):
+    """
+    Our custom loss metric for LightGBM
+    """
     loss = our_loss_function(y_true, y_pred, weights)
     return "our_custom_metric", np.mean(loss), False
 
 
 def get_our_loss_best_const(y_true):
+    """
+    Best constant solution with our custom loss for given target
+    """
     ones = np.ones_like(y_true)
 
     def const_loss(koef):
@@ -113,6 +137,9 @@ def get_our_loss_best_const(y_true):
 
 
 class BaseRegressorWrapper(RegressorMixin):
+    """
+    Base class for wrappers around our regressors
+    """
     def __init__(self):
         self.model = None
 
@@ -135,6 +162,9 @@ class BaseRegressorWrapper(RegressorMixin):
 
 
 class CatboostWrapper(BaseRegressorWrapper):
+    """
+    Catboost wrapper -- to deal with categorical features
+    """
     def __init__(self, cat_features=None, **params):
         super().__init__()
         self.params = params
@@ -161,6 +191,9 @@ class CatboostWrapper(BaseRegressorWrapper):
 
 
 class LightgbmWrapper(BaseRegressorWrapper):
+    """
+    LightGBM wrapper -- to deal with categorical features
+    """
     def __init__(self, cat_features=None, **params):
         super().__init__()
         self.params = params
@@ -198,3 +231,21 @@ class LightgbmWrapper(BaseRegressorWrapper):
         if self._our_loss:
             prediction += np.ones(len(X)) * self.const
         return prediction
+
+
+def load_pipeline(filename):
+    """
+    Download pipeline of preprocessing and model
+    """
+    logger.info(f'Pipeline loaded from {filename}')
+    with gzip.open(filename, "rb") as file:
+        return pickle.load(file)
+
+
+def save_pipeline(pipeline, filename):
+    """
+    Save pipeline of preprocessing and model
+    """
+    logger.info(f'Pipeline saved as {filename}')
+    with gzip.open(filename, "wb") as file:
+        pickle.dump(pipeline, file)
