@@ -307,7 +307,7 @@ class CatFeaturesTransformer(TransformerMixin):
     def _kfold_transform(self, df, col):
         splitter = StratifiedKFold(
             n_splits=self._folds_number,
-            shuffle=False,
+            shuffle=True,
             random_state=RANDOM_SEED,
         )
         filler = pd.Series(index=df.index, dtype=np.float64)
