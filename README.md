@@ -32,3 +32,17 @@
 Для установки модуля можно воспользоваться командой:
 
 `pip install -e .`
+
+## Обучение модели
+
+Обучение модели, сохранение её и результатов предсказания осуществляется в `notebooks/Train_and_compare_models.ipynb`
+
+## Запуск сервиса
+
+`docker build -t test_sber_solution .`
+`docker run -p 5000:5000 test_sber_solution`
+
+
+## Проверка работы
+
+После запуска можно воспользоваться `notebooks/Test_service.ipynb` для проверки работоспособности.
