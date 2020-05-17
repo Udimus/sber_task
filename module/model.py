@@ -144,6 +144,7 @@ class BaseRegressorWrapper(RegressorMixin):
         self.model = None
 
     def _prepare_pool(self, X, y=None):
+        logger.debug('Pool is preparing...')
         return X
 
     def score(self, X, y, sample_weight=None):
@@ -151,10 +152,12 @@ class BaseRegressorWrapper(RegressorMixin):
         return our_loss_function(y, y_pred, sample_weight)
 
     def fit(self, X, y, **params):
+        logger.debug('Model is fitting...')
         self.model.fit(self._prepare_pool(X, y), **params)
         return self
 
     def predict(self, X, **params):
+        logger.debug('Model is predicting...')
         return self.model.predict(self._prepare_pool(X), **params)
 
     def fit_predict(self, X, y, **params):
@@ -174,6 +177,7 @@ class CatboostWrapper(BaseRegressorWrapper):
         self.model = CatBoostRegressor(cat_features=cat_features, **params)
 
     def _prepare_pool(self, X, y=None):
+        logger.debug('Pool is preparing...')
         X = X.copy()
         for col in self.cat_features:
             X[col] = X[col].astype('category')
@@ -185,6 +189,7 @@ class CatboostWrapper(BaseRegressorWrapper):
         )
 
     def predict(self, X, **params):
+        logger.debug('Model is predicting...')
         return self.model.predict(self._prepare_pool(X),
                                   prediction_type='RawFormulaVal',
                                   **params)
@@ -206,12 +211,14 @@ class LightgbmWrapper(BaseRegressorWrapper):
         self.model = LGBMRegressor(**params)
 
     def _prepare_pool(self, X, y=None):
+        logger.debug('Pool is preparing...')
         X = X.copy()
         for col in self.cat_features:
             X[col] = X[col].astype('category')
         return X
 
     def fit(self, X, y, **params):
+        logger.debug('Model is fitting...')
         if self._our_loss:
             self.const = get_our_loss_best_const(y)
             self.model.fit(self._prepare_pool(X),
@@ -227,6 +234,7 @@ class LightgbmWrapper(BaseRegressorWrapper):
         return self
 
     def predict(self, X, **params):
+        logger.debug('Model is predicting...')
         prediction = self.model.predict(self._prepare_pool(X), **params)
         if self._our_loss:
             prediction += np.ones(len(X)) * self.const
