@@ -40,6 +40,7 @@
 ## Запуск сервиса
 
 `docker build -t test_sber_solution .`
+
 `docker run -p 5000:5000 test_sber_solution`
 
 
