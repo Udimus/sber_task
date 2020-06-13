@@ -130,3 +130,9 @@ dmypy.json
 
 # IDE
 .idea/
+
+# Large files
+models/*
+data/*
+!models/.gitkeeper
+!data/.gitkeeper

@@ -1,2 +1,5 @@
 jupyter==1.0.0
 matplotlib==3.2.1
+seaborn==0.10.1
+tqdm==4.46.0
+requests==2.23.0
