@@ -1,6 +1,6 @@
 lightgbm==2.3.1
 numpy==1.18.4
-scipy==1.4.1
+scipy==1.10.0
 scikit-learn==0.22.2.post1
 pandas==1.0.3
 catboost==0.23
